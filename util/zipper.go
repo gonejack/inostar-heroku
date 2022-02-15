@@ -1,4 +1,4 @@
-package dbx
+package util
 
 import (
 	"bytes"

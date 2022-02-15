@@ -1,16 +1,16 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/antonfisher/nested-logrus-formatter"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/gonejack/inostar-heroku/handler"
-	"github.com/gonejack/inostar-heroku/reader"
-	"github.com/gonejack/inostar-heroku/util"
+	"github.com/gonejack/inostar-heroku/config"
+	"github.com/gonejack/inostar-heroku/module/handler"
+	"github.com/gonejack/inostar-heroku/module/handler/general"
+	"github.com/gonejack/inostar-heroku/module/handler/oauth2"
+	"github.com/gonejack/inostar-heroku/module/handler/webhook"
+	"github.com/gonejack/inostar-heroku/module/worker"
 )
 
 func init() {
@@ -20,35 +20,36 @@ func init() {
 		HideKeys:        false,
 		CallerFirst:     true,
 	})
-	level, err := logrus.ParseLevel(os.Getenv("LOG_LEVEL"))
+	level, err := logrus.ParseLevel(config.LogLevel)
 	if err == nil {
 		logrus.SetLevel(level)
 	}
 	if !logrus.IsLevelEnabled(logrus.DebugLevel) {
 		gin.SetMode(gin.ReleaseMode)
 	}
+	worker.InitToken()
 }
-
 func main() {
-	server := gin.New()
-	server.Use(gin.Recovery())
-
-	basic := server.Group("/")
+	r := gin.New()
 	{
-		basic.GET("/", handler.Hello)
-		basic.POST("star", handler.Star)
-		basic.POST("test", handler.Test)
+		r.Use(gin.Recovery())
 	}
-	oauth := server.Group("/oauth2")
+	idx := r.Group("/")
 	{
-		oauth.GET("user_login", handler.UserLogin)
-		oauth.GET("user_info", handler.UserInfo)
+		idx.Any("/", handler.Index)
+		idx.POST("star", general.Star)
+		idx.POST("test", general.Test)
 	}
-
-	reader.ResetByEnv()
-
-	err := server.Run(fmt.Sprintf(":%s", util.Env("PORT", "8080")))
-	if err != nil {
-		logrus.Fatal(err)
+	oauth := r.Group("/oauth2")
+	{
+		oauth.GET("auth", oauth2.Auth)
+		oauth.GET("callback", oauth2.Callback)
+	}
+	hook := r.Group("/webhook")
+	{
+		hook.Any("dropbox", webhook.Dropbox)
+	}
+	if e := r.Run(config.Port); e != nil {
+		logrus.Fatal(e)
 	}
 }

@@ -1,11 +1,16 @@
-package reader
+package worker
 
 import (
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+
+	"github.com/gonejack/inostar-heroku/module/dropbox"
+	"github.com/gonejack/inostar-heroku/util"
 )
 
 type StreamItem struct {
@@ -22,8 +27,8 @@ type StreamItem struct {
 	Continuation string `json:"continuation"`
 }
 
-func (d *StreamItem) From(r io.Reader) (err error) {
-	return json.NewDecoder(r).Decode(d)
+func (s *StreamItem) From(r io.Reader) (err error) {
+	return json.NewDecoder(r).Decode(s)
 }
 
 type Item struct {
@@ -67,13 +72,71 @@ type Item struct {
 	} `json:"origin"`
 }
 
-func (i *Item) StarTime() time.Time {
-	return time.UnixMicro(cast.ToInt64(i.TimestampUsec)).Round(time.Second)
+func (it *Item) StarTime() time.Time {
+	return time.UnixMicro(cast.ToInt64(it.TimestampUsec))
+}
+func (it *Item) Link() string {
+	if len(it.Canonical) > 0 {
+		return it.Canonical[0].Href
+	}
+	return it.Origin.HtmlUrl
 }
 
-func (i *Item) Link() string {
-	if len(i.Canonical) > 0 {
-		return i.Canonical[0].Href
+const stateName = "inostar.json"
+
+type State struct {
+	LastStarTimeRaw string `json:"last_star_time"`
+}
+
+func (s *State) From(r io.Reader) {
+	_ = json.NewDecoder(r).Decode(s)
+}
+func (s *State) String() string {
+	return util.JsonDump(s)
+}
+func (s *State) SetLastStarTime(t time.Time) {
+	s.LastStarTimeRaw = t.Format(time.RFC3339Nano)
+}
+func (s *State) LastStarTime() (t time.Time) {
+	t, err := time.Parse(time.RFC3339Nano, s.LastStarTimeRaw)
+	if s.LastStarTimeRaw == "" || err != nil {
+		t = time.Now()
+		s.SetLastStarTime(t)
 	}
-	return i.Origin.HtmlUrl
+	return
+}
+func (s *State) ReadIn() {
+	_, body, err := dropbox.Read(stateName)
+	if err != nil {
+		if strings.Contains(err.Error(), "not_found") {
+			logrus.Debugf("read %s failed: %s", stateName, err)
+		} else {
+			logrus.Errorf("read %s failed: %s", stateName, err)
+		}
+		return
+	}
+	defer body.Close()
+
+	s.From(body)
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("query state: %s", s.String())
+	}
+}
+func (s *State) WriteOut() {
+	_, err := dropbox.Delete(stateName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not_found") {
+			logrus.Errorf("remove %s failed: %s", stateName, err)
+		}
+	}
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("save state: %s", s.String())
+	}
+
+	_, err = dropbox.Upload(stateName, 0, io.NopCloser(strings.NewReader(s.String())))
+	if err != nil {
+		logrus.Errorf("save %s failed: %s", stateName, err)
+	}
 }

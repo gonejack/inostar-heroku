@@ -2,7 +2,6 @@ package model
 
 import (
 	"context"
-	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -23,6 +22,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gonejack/linesprinter"
 	"github.com/sirupsen/logrus"
+
+	"github.com/gonejack/inostar-heroku/util"
 )
 
 type Email struct {
@@ -39,7 +40,7 @@ type Email struct {
 func (e *Email) Filename() string {
 	return strings.TrimSuffix(e.htm.Filename(), ".html") + ".embed.eml"
 }
-func (e *Email) Render() io.ReadCloser {
+func (e *Email) Build() io.ReadCloser {
 	go e.render()
 	return e.pr
 }
@@ -72,7 +73,7 @@ func (e *Email) renderContent() {
 		case strings.HasPrefix(src, "http://"):
 			fallthrough
 		case strings.HasPrefix(src, "https://"):
-			cid := md5str(src)
+			cid := util.MD5(src)
 			u, err := url.Parse(src)
 			if err == nil {
 				cid += filepath.Ext(u.Path)
@@ -168,8 +169,8 @@ func (e *Email) writeMedia(h textproto.MIMEHeader) {
 		rsp.Body.Close()
 	}()
 
-	h.Set("content-type", Fallback(rsp.Header.Get("content-type"), "application/octet-stream"))
-	h.Set("content-disposition", "inline")
+	h.Set("content-type", util.Fallback(rsp.Header.Get("content-type"), "application/octet-stream"))
+	h.Set("content-disposition", fmt.Sprintf(`inline; filename="%s"`, filename(rsp)))
 	h.Set("content-transfer-encoding", "base64")
 
 	pw, _ := e.mw.CreatePart(h)
@@ -208,15 +209,6 @@ func NewEmail(from string, to string, subject string, html *HTML) (e *Email) {
 	return
 }
 
-func Fallback(val, def string) string {
-	if val == "" {
-		return def
-	}
-	return val
-}
-func md5str(s string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
-}
 func messageId() (string, error) {
 	t := time.Now().UnixNano()
 	pid := os.Getpid()
@@ -229,4 +221,33 @@ func messageId() (string, error) {
 		h = "localhost.localdomain"
 	}
 	return fmt.Sprintf("<%d.%d.%d@%s>", t, pid, rint, h), nil
+}
+
+func filename(rsp *http.Response) string {
+	if cd := rsp.Header.Get("content-disposition"); cd != "" {
+		_, ps, _ := mime.ParseMediaType(cd)
+		if ps["filename"] != "" {
+			return ps["filename"]
+		}
+	}
+
+	name := util.MD5(rsp.Request.RequestURI)
+	ext := ".dat"
+	ct, _, _ := mime.ParseMediaType(rsp.Header.Get("content-type"))
+	switch ct {
+	case "":
+	case "application/javascript", "application/x-javascript":
+		ext = ".js"
+	case "image/jpeg":
+		ext = ".jpg"
+	case "font/opentype":
+		ext = ".otf"
+	default:
+		exs, _ := mime.ExtensionsByType(ct)
+		if len(exs) > 0 {
+			ext = exs[0]
+		}
+	}
+
+	return name + ext
 }

@@ -1,15 +1,15 @@
-package handler
+package general
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/gonejack/inostar-heroku/dbx"
+	"github.com/gonejack/inostar-heroku/module/dropbox"
 )
 
 func Test(c *gin.Context) {
-	_, err := dbx.Upload(c.Query("name"), c.Request.ContentLength, c.Request.Body)
+	_, err := dropbox.Upload(c.Query("name"), c.Request.ContentLength, c.Request.Body)
 	if err == nil {
 		c.String(http.StatusOK, "done")
 	} else {

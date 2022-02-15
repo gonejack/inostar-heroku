@@ -1,4 +1,4 @@
-package handler
+package general
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/gonejack/inostar-heroku/model"
-	"github.com/gonejack/inostar-heroku/util"
+	"github.com/gonejack/inostar-heroku/module/kit"
 )
 
 func Star(c *gin.Context) {
@@ -16,7 +16,7 @@ func Star(c *gin.Context) {
 	var art model.Article
 	err := art.From(c.Request.Body)
 	if err == nil {
-		go util.SaveArticle(&art)
+		go kit.SaveArticle(&art)
 		c.String(http.StatusOK, "ok")
 	} else {
 		logrus.Errorf("parse json failed: %s", err)

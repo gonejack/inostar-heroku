@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -61,7 +62,7 @@ func (h *HTML) contentHeader() string {
 </p>`
 
 	rpl := strings.NewReplacer(
-		"{link}", h.a.Href,
+		"{link}", html.EscapeString(h.a.Href),
 		"{origin}", html.EscapeString(h.a.FeedTitle),
 		"{published}", h.a.StarTime().Format("2006-01-02 15:04:05"),
 		"{title}", html.EscapeString(h.a.Title),
@@ -73,13 +74,18 @@ func (h *HTML) contentFooter() string {
 	const tpl = `
 <br/><br/>
 <a style="display: block; display: inline-block; border-top: 1px solid #ccc; padding-top: 5px; color: #666; text-decoration: none;"
-   href="{link}">{link}</a>
+   href="{link}">{link_text}</a>
 <p style="color:#999;">Save with <a style="color:#666; text-decoration:none; font-weight: bold;" 
 									href="https://github.com/gonejack/inostar">inostar</a>
 </p>`
 
+	text, err := url.QueryUnescape(h.a.Href)
+	if err != nil {
+		text = h.a.Href
+	}
 	rpl := strings.NewReplacer(
-		"{link}", h.a.Href,
+		"{link}", html.EscapeString(h.a.Href),
+		"{link_text}", html.EscapeString(text),
 	)
 
 	return rpl.Replace(tpl)

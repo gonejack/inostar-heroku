@@ -71,7 +71,10 @@ func (e *Email) renderContent() {
 	var cids = make(map[string]bool)
 	doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
 		src, _ := e.Attr("src")
+		e.SetAttr("data-inostar-src", src)
 		switch {
+		case src == "":
+			return
 		case strings.HasPrefix(src, "http://"):
 			fallthrough
 		case strings.HasPrefix(src, "https://"):
@@ -161,9 +164,6 @@ func (e *Email) writeHTML(html string) {
 	e.writeBase64(pw, strings.NewReader(html))
 }
 func (e *Email) writeMedia(h textproto.MIMEHeader) {
-	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*3)
-	defer cancel()
-
 	ref := h.Get("content-location")
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -174,11 +174,21 @@ func (e *Email) writeMedia(h textproto.MIMEHeader) {
 		}()
 	}
 
+	retry := 0
+request:
+	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*3)
 	rsp, err := e.request(timeout, ref)
-	if err != nil {
+	if err == nil {
+		defer cancel()
+	} else {
+		cancel()
+		if retry += 1; retry < 3 {
+			goto request
+		}
 		logrus.Errorf("downolad %s failed: %s", ref, err)
 		return
 	}
+
 	defer func() {
 		io.Copy(io.Discard, rsp.Body)
 		rsp.Body.Close()

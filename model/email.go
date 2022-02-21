@@ -22,6 +22,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gonejack/linesprinter"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 
 	"github.com/gonejack/inostar-heroku/util"
 )
@@ -57,9 +59,9 @@ func (e *Email) renderHeader() {
 	e.write("\r\n")
 }
 func (e *Email) renderContent() {
-	html, _ := e.htm.Render()
+	htm, _ := e.htm.Render()
 
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htm))
 	if err != nil {
 		logrus.Errorf("cannot parse html %s: %s", e.htm, err)
 		return
@@ -91,9 +93,22 @@ func (e *Email) renderContent() {
 			media = append(media, h)
 		}
 	})
+	doc.Find("iframe").Each(func(i int, iframe *goquery.Selection) {
+		src, _ := iframe.Attr("src")
+		if src == "" {
+			return
+		}
+		atag := &html.Node{
+			Type: html.ElementNode,
+			Data: atom.A.String(),
+			Attr: []html.Attribute{{Key: atom.Src.String(), Val: src}},
+		}
+		atag.AppendChild(&html.Node{Type: html.TextNode, Data: src})
+		iframe.ReplaceWithNodes(atag)
+	})
 
-	html, _ = doc.Html()
-	e.writeHTML(html)
+	htm, _ = doc.Html()
+	e.writeHTML(htm)
 
 	for _, m := range media {
 		e.writeMedia(m)

@@ -33,14 +33,15 @@ func (h *HTML) Render() (htm string, err error) {
 
 	h.cleanDoc(doc)
 
+	meta := fmt.Sprintf(`<meta name="inostar:publish" content="%s"/>`, h.a.StarTime().Format(time.RFC1123Z))
+	doc.Find("head").AppendHtml(meta)
+	doc.Find("head").AppendHtml(`<meta charset="utf-8"/>`)
 	if doc.Find("title").Length() == 0 {
 		doc.Find("head").AppendHtml("<title></title>")
 	}
 	if doc.Find("title").Text() == "" {
 		doc.Find("title").SetText(h.a.Title)
 	}
-	meta := fmt.Sprintf(`<meta name="inostar:publish" content="%s">`, h.a.StarTime().Format(time.RFC1123Z))
-	doc.Find("head").AppendHtml(meta)
 
 	return doc.Html()
 }

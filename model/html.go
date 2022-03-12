@@ -90,7 +90,7 @@ func (h *HTML) contentFooter() string {
 
 	return rpl.Replace(tpl)
 }
-func (_ *HTML) cleanDoc(doc *goquery.Document) *goquery.Document {
+func (h *HTML) cleanDoc(doc *goquery.Document) *goquery.Document {
 	// remove inoreader ads
 	doc.Find("body").Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
 

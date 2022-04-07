@@ -7,6 +7,7 @@ import (
 
 	"github.com/gonejack/inostar-heroku/config"
 	"github.com/gonejack/inostar-heroku/module/handler"
+	"github.com/gonejack/inostar-heroku/module/handler/donwload"
 	"github.com/gonejack/inostar-heroku/module/handler/general"
 	"github.com/gonejack/inostar-heroku/module/handler/oauth2"
 	"github.com/gonejack/inostar-heroku/module/handler/webhook"
@@ -49,6 +50,10 @@ func main() {
 	hook := r.Group("/webhook")
 	{
 		hook.Any("dropbox", webhook.Dropbox)
+	}
+	down := r.Group("download")
+	{
+		down.Any("download", donwload.Download)
 	}
 	if e := r.Run(config.Port); e != nil {
 		logrus.Fatal(e)

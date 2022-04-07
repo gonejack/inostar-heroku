@@ -31,7 +31,7 @@ func Download(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	c.String(http.StatusOK, "saving")
+	c.JSON(http.StatusOK, rsp.Header)
 	go func() {
 		defer rsp.Body.Close()
 		dropbox.Upload(util.MD5(download.URL), rsp.ContentLength, rsp.Body)

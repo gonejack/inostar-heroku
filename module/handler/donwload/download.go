@@ -11,7 +11,8 @@ import (
 
 func Download(c *gin.Context) {
 	var download struct {
-		URL string `json:"url"`
+		Name string `json:"name"`
+		URL  string `json:"url"`
 	}
 
 	err := c.BindJSON(&download)
@@ -34,6 +35,9 @@ func Download(c *gin.Context) {
 	c.JSON(http.StatusOK, rsp.Header)
 	go func() {
 		defer rsp.Body.Close()
-		dropbox.Upload(util.MD5(download.URL), rsp.ContentLength, rsp.Body)
+		if download.Name == "" {
+			download.Name = util.MD5(download.URL)
+		}
+		dropbox.Upload(download.Name, rsp.ContentLength, rsp.Body)
 	}()
 }

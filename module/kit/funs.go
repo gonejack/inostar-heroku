@@ -12,9 +12,9 @@ import (
 func SaveArticle(a *model.Article) (f *files.FileMetadata, err error) {
 	html := model.NewHTML(a)
 	email := model.NewEmail(config.EmailFrom, config.EmailTo, a.Title, html)
-	name, content := email.Filename(), email.Build()
+	name, body := email.Filename(), email.Build()
 	if config.EmailZip {
-		name, content = name+".gz", util.NewZipper(content)
+		name, body = name+".gz", util.NewZipper(body)
 	}
-	return dropbox.Upload(name, 0, content)
+	return dropbox.Upload(name, 0, body)
 }

@@ -29,45 +29,46 @@ import (
 )
 
 type Email struct {
-	pr io.ReadCloser
-	pw io.WriteCloser
-	mw *multipart.Writer
-	h  textproto.MIMEHeader
-
-	htm *HTML
-
-	boundary string
+	headers textproto.MIMEHeader
+	html    *HTML
+	build   struct {
+		writer *multipart.Writer
+	}
+	output struct {
+		reader io.ReadCloser
+		writer io.WriteCloser
+	}
 }
 
 func (e *Email) Filename() string {
-	return strings.TrimSuffix(e.htm.Filename(), ".html") + ".embed.eml"
+	return strings.TrimSuffix(e.html.Filename(), ".html") + ".embed.eml"
 }
 func (e *Email) Build() io.ReadCloser {
 	go e.render()
-	return e.pr
+	return e.output.reader
 }
 
 func (e *Email) render() {
-	defer e.pw.Close()
-	defer e.mw.Close()
+	defer e.output.writer.Close()
+	defer e.build.writer.Close()
 
 	e.renderHeader()
 	e.renderContent()
 }
 func (e *Email) renderHeader() {
-	e.writeHeader(e.h)
+	e.writeHeader(e.headers)
 	e.write("\r\n")
 }
 func (e *Email) renderContent() {
-	htm, _ := e.htm.Render()
+	dat, _ := e.html.Render()
 
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htm))
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(dat))
 	if err != nil {
-		logrus.Errorf("cannot parse html %s: %s", e.htm, err)
+		logrus.Errorf("cannot parse html %s: %s", e.html, err)
 		return
 	}
 
-	var media []textproto.MIMEHeader
+	var listOfMedia []textproto.MIMEHeader
 	var cids = make(map[string]bool)
 	doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
 		src, _ := e.Attr("src")
@@ -90,10 +91,10 @@ func (e *Email) renderContent() {
 			}
 			cids[cid] = true
 
-			h := textproto.MIMEHeader{}
-			h.Set("content-id", fmt.Sprintf("<%s>", cid))
-			h.Set("content-location", src)
-			media = append(media, h)
+			headerOfMedia := textproto.MIMEHeader{}
+			headerOfMedia.Set("content-id", fmt.Sprintf("<%s>", cid))
+			headerOfMedia.Set("content-location", src)
+			listOfMedia = append(listOfMedia, headerOfMedia)
 		}
 	})
 	doc.Find("iframe").Each(func(i int, iframe *goquery.Selection) {
@@ -101,35 +102,35 @@ func (e *Email) renderContent() {
 		if src == "" {
 			return
 		}
-		atag := &html.Node{
+		a := &html.Node{
 			Type: html.ElementNode,
 			Data: atom.A.String(),
 			Attr: []html.Attribute{{Key: atom.Src.String(), Val: src}},
 		}
-		atag.AppendChild(&html.Node{Type: html.TextNode, Data: src})
-		iframe.ReplaceWithNodes(atag)
+		a.AppendChild(&html.Node{Type: html.TextNode, Data: src})
+		iframe.ReplaceWithNodes(a)
 	})
 
-	htm, _ = doc.Html()
-	e.writeHTML(htm)
+	dat, _ = doc.Html()
+	e.writeHTML(dat)
 
-	for _, m := range media {
-		e.writeMedia(m)
+	for _, mediaHeader := range listOfMedia {
+		e.writeMedia(mediaHeader)
 	}
 }
 
 func (e *Email) write(a ...interface{}) {
-	fmt.Fprint(e.pw, a...)
+	fmt.Fprint(e.output.writer, a...)
 }
 func (e *Email) writeHeader(header textproto.MIMEHeader) {
-	for f, vs := range header {
-		for _, v := range vs {
-			e.write(f, ": ")
+	for field, values := range header {
+		for _, value := range values {
+			e.write(field, ": ")
 			switch {
-			case f == "Content-Type" || f == "Content-Disposition":
-				e.write(v)
-			case f == "From" || f == "To" || f == "Cc" || f == "Bcc":
-				participants := strings.Split(v, ",")
+			case field == "Content-Type" || field == "Content-Disposition":
+				e.write(value)
+			case field == "From" || field == "To" || field == "Cc" || field == "Bcc":
+				participants := strings.Split(value, ",")
 				for i, v := range participants {
 					addr, err := mail.ParseAddress(v)
 					if err != nil {
@@ -139,32 +140,32 @@ func (e *Email) writeHeader(header textproto.MIMEHeader) {
 				}
 				e.write(strings.Join(participants, ", "))
 			default:
-				e.write(mime.QEncoding.Encode("utf-8", v))
+				e.write(mime.QEncoding.Encode("utf-8", value))
 			}
 			e.write("\r\n")
 		}
 	}
 }
-func (e *Email) writeBase64(w io.Writer, r io.Reader) {
-	prt := linesprinter.NewLinesPrinter(w, 76, []byte("\r\n"))
-	enc := base64.NewEncoder(base64.StdEncoding, prt)
-	_, err := io.Copy(enc, r)
+func (e *Email) writeBase64(writer io.Writer, reader io.Reader) {
+	printer := linesprinter.NewLinesPrinter(writer, 76, []byte("\r\n"))
+	encoder := base64.NewEncoder(base64.StdEncoding, printer)
+	_, err := io.Copy(encoder, reader)
 	if err != nil {
 		logrus.Errorf("copy failed: %s", err)
 	}
-	enc.Close()
-	prt.Close()
+	encoder.Close()
+	printer.Close()
 }
 func (e *Email) writeHTML(html string) {
-	h := textproto.MIMEHeader{}
-	h.Set("content-type", "text/html; charset=utf-8")
-	h.Set("content-transfer-encoding", "base64")
+	header := textproto.MIMEHeader{}
+	header.Set("content-type", "text/html; charset=utf-8")
+	header.Set("content-transfer-encoding", "base64")
 
-	pw, _ := e.mw.CreatePart(h)
-	e.writeBase64(pw, strings.NewReader(html))
+	partWriter, _ := e.build.writer.CreatePart(header)
+	e.writeBase64(partWriter, strings.NewReader(html))
 }
-func (e *Email) writeMedia(h textproto.MIMEHeader) {
-	ref := h.Get("content-location")
+func (e *Email) writeMedia(header textproto.MIMEHeader) {
+	ref := header.Get("content-location")
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		start := time.Now()
@@ -194,42 +195,43 @@ request:
 		rsp.Body.Close()
 	}()
 
-	h.Set("content-type", util.Fallback(rsp.Header.Get("content-type"), "application/octet-stream"))
-	h.Set("content-disposition", fmt.Sprintf(`inline; filename="%s"`, filename(rsp)))
-	h.Set("content-transfer-encoding", "base64")
+	header.Set("content-type", util.Fallback(rsp.Header.Get("content-type"), "application/octet-stream"))
+	header.Set("content-disposition", fmt.Sprintf(`inline; filename="%s"`, filename(rsp)))
+	header.Set("content-transfer-encoding", "base64")
 
-	pw, _ := e.mw.CreatePart(h)
-	e.writeBase64(pw, rsp.Body)
+	partWriter, _ := e.build.writer.CreatePart(header)
+	e.writeBase64(partWriter, rsp.Body)
 }
 func (e *Email) request(ctx context.Context, src string) (resp *http.Response, err error) {
-	r, err := http.NewRequest(http.MethodGet, src, nil)
+	req, err := http.NewRequest(http.MethodGet, src, nil)
 	if err != nil {
 		return
 	}
 
-	r.Header.Set("referer", e.htm.a.Href)
-	r.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0")
+	req.Header.Set("referer", e.html.article.Href)
+	req.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0")
 
-	return client.Do(r.WithContext(ctx))
+	return client.Do(req.WithContext(ctx))
 }
 
-func NewEmail(from string, to string, subject string, html *HTML) (e *Email) {
-	e = new(Email)
-	e.pr, e.pw = io.Pipe()
-	e.mw = multipart.NewWriter(e.pw)
+func NewEmail(from string, to string, subject string, html *HTML) (email *Email) {
+	email = new(Email)
 
-	e.h = textproto.MIMEHeader{}
-	e.h.Set("Mime-Version", "1.0")
-	e.h.Set("Content-Type", "multipart/related;\r\n boundary="+e.mw.Boundary())
-	e.h.Set("Subject", subject)
-	e.h.Set("From", from)
-	e.h.Set("To", to)
-	e.h.Set("Date", html.a.StarTime().Format(time.RFC1123Z))
+	email.output.reader, email.output.writer = io.Pipe()
+	email.build.writer = multipart.NewWriter(email.output.writer)
+
+	email.headers = textproto.MIMEHeader{}
+	email.headers.Set("Mime-Version", "1.0")
+	email.headers.Set("Content-Type", "multipart/related;\r\n boundary="+email.build.writer.Boundary())
+	email.headers.Set("Subject", subject)
+	email.headers.Set("From", from)
+	email.headers.Set("To", to)
+	email.headers.Set("Date", html.article.StarTime().Format(time.RFC1123Z))
 	id, err := messageId()
 	if err == nil {
-		e.h.Set("Message-Id", id)
+		email.headers.Set("Message-Id", id)
 	}
-	e.htm = html
+	email.html = html
 
 	return
 }
@@ -247,7 +249,6 @@ func messageId() (string, error) {
 	}
 	return fmt.Sprintf("<%d.%d.%d@%s>", t, pid, rint, h), nil
 }
-
 func filename(rsp *http.Response) string {
 	if cd := rsp.Header.Get("content-disposition"); cd != "" {
 		_, ps, _ := mime.ParseMediaType(cd)

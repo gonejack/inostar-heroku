@@ -71,22 +71,22 @@ func (w *worker) handle() {
 	}
 	for stars.Len() > 0 {
 		star, _ := stars.Pop()
-		artc := &model.Article{
+		a := &model.Article{
 			FeedTitle:   star.Origin.Title,
 			Title:       star.Title,
 			StarTimeRaw: star.StarTime().UTC().Format("01/02/2006 3:04:05 PM"),
 			Href:        star.Link(),
 			Article:     star.Summary.Content,
 		}
-		artc.Refine()
-		_, err := kit.SaveArticle(artc)
+		a.Refine()
+		_, err := kit.SaveArticle(a)
 		switch {
 		case err == nil:
 			w.state.SetLastStarTime(star.StarTime())
 		case strings.Contains(err.Error(), "conflict"):
-			logrus.Warnf("save post %s failed: %s", artc.Title, err)
+			logrus.Warnf("save post %s failed: %s", a.Title, err)
 		default:
-			logrus.Errorf("save post %s failed: %s", artc.Title, err)
+			logrus.Errorf("save post %s failed: %s", a.Title, err)
 			return
 		}
 	}

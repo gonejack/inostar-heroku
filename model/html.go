@@ -16,13 +16,13 @@ import (
 var client http.Client
 
 type HTML struct {
-	a *Article
+	article *Article
 }
 
 func (h *HTML) Filename() string {
-	feed := maxLen(h.a.FeedTitle, 30)
-	item := maxLen(h.a.Title, 30)
-	return safetyName(fmt.Sprintf("[%s][%s][%s].html", feed, h.a.StarTime().Format("2006-01-02 15.04.05"), item))
+	feed := maxLen(h.article.FeedTitle, 30)
+	item := maxLen(h.article.Title, 30)
+	return safetyName(fmt.Sprintf("[%s][%s][%s].html", feed, h.article.StarTime().Format("2006-01-02 15.04.05"), item))
 }
 func (h *HTML) Render() (htm string, err error) {
 	content := h.content()
@@ -34,21 +34,21 @@ func (h *HTML) Render() (htm string, err error) {
 
 	h.cleanDoc(doc)
 
-	meta := fmt.Sprintf(`<meta name="inostar:publish" content="%s"/>`, h.a.StarTime().Format(time.RFC1123Z))
+	meta := fmt.Sprintf(`<meta name="inostar:publish" content="%s"/>`, h.article.StarTime().Format(time.RFC1123Z))
 	doc.Find("head").AppendHtml(meta)
 	doc.Find("head").AppendHtml(`<meta charset="utf-8"/>`)
 	if doc.Find("title").Length() == 0 {
 		doc.Find("head").AppendHtml("<title></title>")
 	}
 	if doc.Find("title").Text() == "" {
-		doc.Find("title").SetText(h.a.Title)
+		doc.Find("title").SetText(h.article.Title)
 	}
 
 	return doc.Html()
 }
 
 func (h *HTML) content() string {
-	content := fmt.Sprintf("%s %s %s", h.contentHeader(), h.a.Article, h.contentFooter())
+	content := fmt.Sprintf("%s %s %s", h.contentHeader(), h.article.Article, h.contentFooter())
 
 	return gohtml.Format(content)
 }
@@ -62,10 +62,10 @@ func (h *HTML) contentHeader() string {
 </p>`
 
 	rpl := strings.NewReplacer(
-		"{link}", html.EscapeString(h.a.Href),
-		"{origin}", html.EscapeString(h.a.FeedTitle),
-		"{published}", h.a.StarTime().Format("2006-01-02 15:04:05"),
-		"{title}", html.EscapeString(h.a.Title),
+		"{link}", html.EscapeString(h.article.Href),
+		"{origin}", html.EscapeString(h.article.FeedTitle),
+		"{published}", h.article.StarTime().Format("2006-01-02 15:04:05"),
+		"{title}", html.EscapeString(h.article.Title),
 	)
 
 	return rpl.Replace(tpl)
@@ -79,12 +79,12 @@ func (h *HTML) contentFooter() string {
 									href="https://github.com/gonejack/inostar">inostar</a>
 </p>`
 
-	text, err := url.QueryUnescape(h.a.Href)
+	text, err := url.QueryUnescape(h.article.Href)
 	if err != nil {
-		text = h.a.Href
+		text = h.article.Href
 	}
 	rpl := strings.NewReplacer(
-		"{link}", html.EscapeString(h.a.Href),
+		"{link}", html.EscapeString(h.article.Href),
 		"{link_text}", html.EscapeString(text),
 	)
 

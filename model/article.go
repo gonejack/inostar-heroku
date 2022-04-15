@@ -83,6 +83,20 @@ func (a *Article) fullBody() {
 			return
 		}
 		a.Article = htm
+	case strings.HasSuffix(u.Host, "thoughtworks.cn"):
+		full, err := a.grabDoc()
+		if err != nil {
+			logrus.Errorf("cannot parse content from %s", a.Href)
+			return
+		}
+		ct := full.Find("article.post div.entry-wrap").First()
+		ct.Find("*").RemoveAttr("style").RemoveAttr("class")
+		htm, err := ct.Html()
+		if err != nil {
+			logrus.Errorf("cannot generate content of %s", a.Href)
+			return
+		}
+		a.Article = htm
 	}
 }
 

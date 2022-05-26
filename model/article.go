@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -97,6 +98,22 @@ func (a *Article) fullBody() {
 			return
 		}
 		a.Article = htm
+	case strings.HasSuffix(u.Host, "huxiu.com"):
+		full, err := a.grabDoc()
+		if err != nil {
+			logrus.Errorf("cannot parse content from %s", a.Href)
+			return
+		}
+		js := full.Find("div.js-video-play-log-report-wrap script").Text()
+		if js == "" {
+			return
+		}
+		ms := regexp.MustCompile(`'(https://.*video\.huxiucdn\.com/[^']+)'`).FindStringSubmatch(js)
+		if len(ms) > 0 {
+			tpl := `<video autoplay controls width="100%%"><source src="%s" type="video/mp4"></video>`
+			video := fmt.Sprintf(tpl, ms[1])
+			a.Article = video + a.Article
+		}
 	}
 }
 

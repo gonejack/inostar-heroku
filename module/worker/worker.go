@@ -79,23 +79,25 @@ func (w *worker) handle() {
 			Article:     star.Summary.Content,
 		}
 		a.Refine()
+
+		logrus.Infof("saving [%s][%s]", star.Title, star.StarTime())
 		_, err := kit.SaveAsEmail(a)
 		switch {
 		case err == nil:
 			w.state.SetLastStarTime(star.StarTime())
 		case strings.Contains(err.Error(), "conflict"):
-			logrus.Warnf("save post %s as email failed: %s", a.Title, err)
+			logrus.Warnf("saving post %s as email failed: %s", a.Title, err)
 		default:
-			logrus.Errorf("save post %s as email failed: %s", a.Title, err)
+			logrus.Errorf("saving post %s as email failed: %s", a.Title, err)
 
 			_, err = kit.SaveAsHTML(a)
 			switch {
 			case err == nil:
 				w.state.SetLastStarTime(star.StarTime())
 			case strings.Contains(err.Error(), "conflict"):
-				logrus.Warnf("save post %s as HTML failed: %s", a.Title, err)
+				logrus.Warnf("saving post %s as HTML failed: %s", a.Title, err)
 			default:
-				logrus.Errorf("save post %s as HTML failed: %s", a.Title, err)
+				logrus.Errorf("saving post %s as HTML failed: %s", a.Title, err)
 			}
 		}
 	}

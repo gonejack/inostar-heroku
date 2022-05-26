@@ -186,7 +186,7 @@ func (e *Email) writeMedia(header textproto.MIMEHeader) error {
 
 	retry := 0
 request:
-	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*6)
+	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*3)
 	rsp, err := e.request(timeout, ref)
 	if err == nil {
 		defer cancel()
@@ -198,10 +198,7 @@ request:
 		return fmt.Errorf("downolad %s failed: %s", ref, err)
 	}
 
-	defer func() {
-		io.Copy(io.Discard, rsp.Body)
-		rsp.Body.Close()
-	}()
+	defer rsp.Body.Close()
 
 	header.Set("content-type", util.Fallback(rsp.Header.Get("content-type"), "application/octet-stream"))
 	header.Set("content-disposition", fmt.Sprintf(`inline; filename="%s"`, filename(rsp)))

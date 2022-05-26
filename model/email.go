@@ -38,6 +38,7 @@ type Email struct {
 		reader io.ReadCloser
 		writer io.WriteCloser
 	}
+	renderError error
 }
 
 func (e *Email) Filename() string {
@@ -46,6 +47,9 @@ func (e *Email) Filename() string {
 func (e *Email) Build() io.ReadCloser {
 	go e.render()
 	return e.output.reader
+}
+func (e *Email) RenderErr() error {
+	return e.renderError
 }
 
 func (e *Email) render() {
@@ -115,7 +119,11 @@ func (e *Email) renderContent() {
 	e.writeHTML(dat)
 
 	for _, mediaHeader := range listOfMedia {
-		e.writeMedia(mediaHeader)
+		err := e.writeMedia(mediaHeader)
+		if err != nil {
+			e.renderError = err
+			break
+		}
 	}
 }
 
@@ -146,15 +154,16 @@ func (e *Email) writeHeader(header textproto.MIMEHeader) {
 		}
 	}
 }
-func (e *Email) writeBase64(writer io.Writer, reader io.Reader) {
+func (e *Email) writeBase64(writer io.Writer, reader io.Reader) (err error) {
 	printer := linesprinter.NewLinesPrinter(writer, 76, []byte("\r\n"))
+	defer printer.Close()
 	encoder := base64.NewEncoder(base64.StdEncoding, printer)
-	_, err := io.Copy(encoder, reader)
+	defer encoder.Close()
+	_, err = io.Copy(encoder, reader)
 	if err != nil {
-		logrus.Errorf("copy failed: %s", err)
+		err = fmt.Errorf("copy failed: %s", err)
 	}
-	encoder.Close()
-	printer.Close()
+	return
 }
 func (e *Email) writeHTML(html string) {
 	header := textproto.MIMEHeader{}
@@ -164,7 +173,7 @@ func (e *Email) writeHTML(html string) {
 	partWriter, _ := e.build.writer.CreatePart(header)
 	e.writeBase64(partWriter, strings.NewReader(html))
 }
-func (e *Email) writeMedia(header textproto.MIMEHeader) {
+func (e *Email) writeMedia(header textproto.MIMEHeader) error {
 	ref := header.Get("content-location")
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -177,7 +186,7 @@ func (e *Email) writeMedia(header textproto.MIMEHeader) {
 
 	retry := 0
 request:
-	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*3)
+	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*5)
 	rsp, err := e.request(timeout, ref)
 	if err == nil {
 		defer cancel()
@@ -186,8 +195,7 @@ request:
 		if retry += 1; retry < 3 {
 			goto request
 		}
-		logrus.Errorf("downolad %s failed: %s", ref, err)
-		return
+		return fmt.Errorf("downolad %s failed: %s", ref, err)
 	}
 
 	defer func() {
@@ -200,7 +208,7 @@ request:
 	header.Set("content-transfer-encoding", "base64")
 
 	partWriter, _ := e.build.writer.CreatePart(header)
-	e.writeBase64(partWriter, rsp.Body)
+	return e.writeBase64(partWriter, rsp.Body)
 }
 func (e *Email) request(ctx context.Context, src string) (resp *http.Response, err error) {
 	req, err := http.NewRequest(http.MethodGet, src, nil)

@@ -16,7 +16,12 @@ func Star(c *gin.Context) {
 	var art model.Article
 	err := art.From(c.Request.Body)
 	if err == nil {
-		go kit.SaveArticle(&art)
+		go func() {
+			_, err := kit.SaveAsEmail(&art)
+			if err != nil {
+				_, err = kit.SaveAsHTML(&art)
+			}
+		}()
 		c.String(http.StatusOK, "ok")
 	} else {
 		logrus.Errorf("parse json failed: %s", err)

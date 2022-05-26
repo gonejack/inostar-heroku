@@ -79,14 +79,18 @@ func (w *worker) handle() {
 			Article:     star.Summary.Content,
 		}
 		a.Refine()
-		_, err := kit.SaveArticle(a)
+		_, err := kit.SaveAsEmail(a)
 		switch {
 		case err == nil:
 			w.state.SetLastStarTime(star.StarTime())
 		case strings.Contains(err.Error(), "conflict"):
 			logrus.Warnf("save post %s failed: %s", a.Title, err)
 		default:
-			logrus.Errorf("save post %s failed: %s", a.Title, err)
+			logrus.Errorf("save post %s as email failed: %s", a.Title, err)
+			_, err = kit.SaveAsHTML(a)
+			if err != nil {
+				logrus.Errorf("save post %s as html failed: %s", a.Title, err)
+			}
 			return
 		}
 	}

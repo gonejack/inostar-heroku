@@ -28,6 +28,6 @@ func SaveAsEmail(a *model.Article) (f *files.FileMetadata, err error) {
 
 func SaveAsHTML(a *model.Article) (f *files.FileMetadata, err error) {
 	html := model.NewHTML(a)
-	content, _ := html.Render()
-	return dropbox.Upload(html.Filename(), int64(len(content)), io.NopCloser(strings.NewReader(content)))
+	dat, _ := html.Render()
+	return dropbox.Upload(html.Filename(), int64(len(dat)), io.NopCloser(strings.NewReader(dat)))
 }

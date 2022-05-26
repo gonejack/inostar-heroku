@@ -22,7 +22,7 @@ type HTML struct {
 func (h *HTML) Filename() string {
 	feed := maxLen(h.article.FeedTitle, 30)
 	item := maxLen(h.article.Title, 30)
-	return safetyName(fmt.Sprintf("[%s][%s][%s].html", feed, h.article.StarTime().Format("2006-01-02 15.04.05"), item))
+	return safetyName(fmt.Sprintf("[%s][%s][%s].html", feed, h.article.StarTime().Local().Format("2006-01-02 15.04.05"), item))
 }
 func (h *HTML) Render() (htm string, err error) {
 	content := h.content()

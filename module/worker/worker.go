@@ -84,14 +84,19 @@ func (w *worker) handle() {
 		case err == nil:
 			w.state.SetLastStarTime(star.StarTime())
 		case strings.Contains(err.Error(), "conflict"):
-			logrus.Warnf("save post %s failed: %s", a.Title, err)
+			logrus.Warnf("save post %s as email failed: %s", a.Title, err)
 		default:
 			logrus.Errorf("save post %s as email failed: %s", a.Title, err)
+
 			_, err = kit.SaveAsHTML(a)
-			if err != nil {
-				logrus.Errorf("save post %s as html failed: %s", a.Title, err)
+			switch {
+			case err == nil:
+				w.state.SetLastStarTime(star.StarTime())
+			case strings.Contains(err.Error(), "conflict"):
+				logrus.Warnf("save post %s as HTML failed: %s", a.Title, err)
+			default:
+				logrus.Errorf("save post %s as HTML failed: %s", a.Title, err)
 			}
-			return
 		}
 	}
 }

@@ -186,7 +186,7 @@ func (e *Email) writeMedia(header textproto.MIMEHeader) error {
 
 	retry := 0
 request:
-	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*5)
+	timeout, cancel := context.WithTimeout(context.TODO(), time.Minute*6)
 	rsp, err := e.request(timeout, ref)
 	if err == nil {
 		defer cancel()
@@ -211,15 +211,13 @@ request:
 	return e.writeBase64(partWriter, rsp.Body)
 }
 func (e *Email) request(ctx context.Context, src string) (resp *http.Response, err error) {
-	req, err := http.NewRequest(http.MethodGet, src, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
 	if err != nil {
 		return
 	}
-
 	req.Header.Set("referer", e.html.article.Href)
 	req.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0")
-
-	return client.Do(req.WithContext(ctx))
+	return client.Do(req)
 }
 
 func NewEmail(from string, to string, subject string, html *HTML) (email *Email) {

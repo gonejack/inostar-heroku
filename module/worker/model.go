@@ -2,6 +2,7 @@ package worker
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"time"
@@ -105,7 +106,7 @@ func (s *State) LastStarTime() (t time.Time) {
 	}
 	return
 }
-func (s *State) ReadIn() {
+func (s *State) Read() {
 	_, body, err := dropbox.Read(stateName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not_found") {
@@ -123,7 +124,7 @@ func (s *State) ReadIn() {
 		logrus.Debugf("query state: %s", s.String())
 	}
 }
-func (s *State) WriteOut() {
+func (s *State) Save() {
 	_, err := dropbox.Delete(stateName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not_found") {
@@ -139,4 +140,27 @@ func (s *State) WriteOut() {
 	if err != nil {
 		logrus.Errorf("save %s failed: %s", stateName, err)
 	}
+}
+
+type stack struct {
+	arr []Item
+}
+
+func (s *stack) Len() int {
+	return len(s.arr)
+}
+func (s *stack) Push(v Item) {
+	s.arr = append(s.arr, v)
+}
+func (s *stack) Pop() (v Item, err error) {
+	if n := len(s.arr); n == 0 {
+		err = errors.New("stack is empty")
+	} else {
+		v, s.arr = s.arr[n-1], s.arr[:n-1]
+	}
+	return
+}
+
+func NewStack() *stack {
+	return &stack{}
 }

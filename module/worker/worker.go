@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -67,43 +66,50 @@ func (w *worker) handle() {
 	logrus.Infof("query stars")
 	stars := w.fetchStars()
 	if stars.Len() > 0 {
-		defer w.state.WriteOut()
+		defer w.state.Save()
 	}
 	for stars.Len() > 0 {
 		star, _ := stars.Pop()
-		a := &model.Article{
-			FeedTitle:   star.Origin.Title,
-			Title:       star.Title,
-			StarTimeRaw: star.StarTime().UTC().Format("01/02/2006 3:04:05 PM"),
-			Href:        star.Link(),
-			Article:     star.Summary.Content,
-		}
-		a.Refine()
+		w.save(star)
+		w.state.SetLastStarTime(star.StarTime())
+	}
+}
+func (w *worker) save(star Item) {
+	logrus.Infof("saving [%s][%s]", star.Title, star.StarTime())
 
-		logrus.Infof("saving [%s][%s]", star.Title, star.StarTime())
-		_, err := kit.SaveAsEmail(a)
+	art := &model.Article{
+		FeedTitle:   star.Origin.Title,
+		Title:       star.Title,
+		StarTimeRaw: star.StarTime().UTC().Format("01/02/2006 3:04:05 PM"),
+		Href:        star.Link(),
+		Article:     star.Summary.Content,
+	}
+	art.Refine()
+
+	_, err := kit.SaveAsEmail(art)
+	switch {
+	case err == nil:
+	case strings.Contains(err.Error(), "conflict"):
+		logrus.Warnf("saving post %s as email failed: %s", art.Title, err)
+	case strings.Contains(err.Error(), "exist"):
+		logrus.Warnf("saving post %s as email failed: %s", art.Title, err)
+	default:
+		logrus.Errorf("saving post %s as email failed: %s", art.Title, err)
+
+		_, err = kit.SaveAsHTML(art)
 		switch {
 		case err == nil:
-			w.state.SetLastStarTime(star.StarTime())
 		case strings.Contains(err.Error(), "conflict"):
-			logrus.Warnf("saving post %s as email failed: %s", a.Title, err)
+			logrus.Warnf("saving post %s as HTML failed: %s", art.Title, err)
+		case strings.Contains(err.Error(), "exist"):
+			logrus.Warnf("saving post %s as HTML failed: %s", art.Title, err)
 		default:
-			logrus.Errorf("saving post %s as email failed: %s", a.Title, err)
-
-			_, err = kit.SaveAsHTML(a)
-			switch {
-			case err == nil:
-				w.state.SetLastStarTime(star.StarTime())
-			case strings.Contains(err.Error(), "conflict"):
-				logrus.Warnf("saving post %s as HTML failed: %s", a.Title, err)
-			default:
-				logrus.Errorf("saving post %s as HTML failed: %s", a.Title, err)
-			}
+			logrus.Errorf("saving post %s as HTML failed: %s", art.Title, err)
 		}
 	}
 }
 func (w *worker) fetchStars() (stars *stack) {
-	w.state.ReadIn()
+	w.state.Read()
 
 	stars = NewStack()
 	query := w.queryStarsParams()
@@ -157,27 +163,4 @@ func (w *worker) queryStarsParams() (q url.Values) {
 	// Accepted values: user/-/state/com.google/starred, user/-/state/com.google/like.
 	q.Set("it", inoreader.TagStarred.String())
 	return q
-}
-
-type stack struct {
-	arr []Item
-}
-
-func (s *stack) Len() int {
-	return len(s.arr)
-}
-func (s *stack) Push(v Item) {
-	s.arr = append(s.arr, v)
-}
-func (s *stack) Pop() (v Item, err error) {
-	if n := len(s.arr); n == 0 {
-		err = errors.New("stack is empty")
-	} else {
-		v, s.arr = s.arr[n-1], s.arr[:n-1]
-	}
-	return
-}
-
-func NewStack() *stack {
-	return &stack{}
 }

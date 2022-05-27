@@ -1,0 +1,3 @@
+GET https://inostar.herokuapp.com/test?name=abc
+
+###

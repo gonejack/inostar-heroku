@@ -116,7 +116,6 @@ func (a *Article) fullBody() {
 		}
 	}
 }
-
 func (a *Article) grabDoc() (doc *goquery.Document, err error) {
 	timeout, cancel := context.WithTimeout(context.TODO(), time.Second*15)
 	defer cancel()
@@ -141,7 +140,6 @@ func (a *Article) grabDoc() (doc *goquery.Document, err error) {
 	htm := strings.ReplaceAll(string(dat), "<!--!-->", "")
 	return goquery.NewDocumentFromReader(strings.NewReader(htm))
 }
-
 func (a *Article) shouldUnescape(s string) bool {
 	return regexp.MustCompile(`(&#\d{2,6};){2,}`).MatchString(s)
 }

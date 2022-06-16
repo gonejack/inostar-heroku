@@ -2,8 +2,8 @@ POST https://inostar.herokuapp.com/download/download
 Content-Type: application/json
 
 {
-    "name": "EmuELEC-Amlogic-ng.aarch64-4.5-Generic.img.gz",
-    "url": "https://github.com/EmuELEC/EmuELEC/releases/download/v4.5/EmuELEC-Amlogic-ng.aarch64-4.5-Generic.img.gz"
+    "name": "RetroArch.1.10.6.msvc2019.7z",
+    "url": "https://github.com/basharast/RetroArch-ARM/releases/download/1.10.6a/RetroArch.1.10.6.msvc2019.7z"
 }
 
 ###

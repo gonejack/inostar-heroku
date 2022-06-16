@@ -40,7 +40,7 @@ func main() {
 		idx.Any("/", handler.Index)
 		idx.POST("star", general.Star)
 		idx.Any("test", general.Test)
-		idx.GET("masky_debug", general.Debug)
+		idx.GET("debug", general.Debug)
 	}
 	oauth := r.Group("/oauth2")
 	{
